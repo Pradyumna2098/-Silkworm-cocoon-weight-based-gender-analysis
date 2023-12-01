@@ -1,0 +1,119 @@
+// Libraries:
+#include<HX711.h>        //Download it from https://github.com/bogde/HX711
+#include<Wire.h>
+#include<LiquidCrystal.h>
+#include<Servo.h>
+#include<dht.h>          //https://lastminuteengineers.com/libraries/DHTlib.zip
+
+// Pin Numbers:
+#define RS_Pin 12       // Connect to RS pin of LCD Display
+#define EN_Pin 11       // Connect to EN pin of LCD Display
+#define D4_Pin 10       // Connect to D4 pin of LCD Display
+#define D5_Pin 9        // Connect to D5 pin of LCD Display
+#define D6_Pin 8        // Connect to D6 pin of LCD Display
+#define D7_Pin 7        // Connect to D4 pin of LCD Display
+
+#define DT_Pin 2        // Connect to DT of HX711 Module
+#define SCK_Pin 3       // Connect to SCK of HX711 Module
+
+#define ServoPush_Pin 5    // Connect to servo motor
+#define ServoSort_Pin 6    // Connect to servo motor
+
+#define DHT11_Pin 4     // Connect to OUT pin of DHT11 Module
+
+// Constants:
+const byte lcdNumCols = 20; // LCD's number of columns
+const byte lcdNumRows = 4;  // LCD's number of rows
+
+// Objects:
+LiquidCrystal lcd(RS_Pin, EN_Pin, D4_Pin, D5_Pin, D6_Pin, D7_Pin);
+HX711 scale;
+Servo servoPush;
+Servo servoSort;
+dht DHT;
+
+// Variables:
+long CalibFact = 11665;       // Calibration Factor
+float weight;
+
+int srvPosReset = 0;
+int srvPosPush = 90;
+
+int srvPosShell = 30;
+int srvPosMale = 90;
+int srvPosFemale = 150;
+
+int valTemp, valHumi;
+
+void setup() {
+  Serial.begin(9600);
+  servoPush.attach(ServoPush_Pin);
+  servoSort.attach(ServoSort_Pin);
+  servoPush.write(srvPosReset);
+  servoSort.write(srvPosMale);
+  delay(2000);
+
+  scale.begin(DT_Pin, SCK_Pin);
+  delay(1000);
+
+  scale.tare(10);
+  scale.set_scale(CalibFact);
+
+  lcd.begin(lcdNumCols, lcdNumRows);
+  lcd.setCursor(0, 2);              //(ColIndex, RowIndex)
+  lcd.print("Weight[g] = ");
+
+  lcd.setCursor(0, 0);
+  lcd.print("Temp = ");
+  lcd.setCursor(0, 1);
+  lcd.print("Humi = ");
+}
+
+
+void loop() {
+  DHT.read11(DHT11_Pin);
+  valTemp = DHT.temperature;  // Gets the values of the temperature
+  valHumi = DHT.humidity;     // Gets the values of the humidity
+
+  lcd.setCursor(7, 0);
+  lcd.print(valTemp);
+  // Prints degree symbol
+  lcd.print((char)223);
+  lcd.print("C   ");
+
+  lcd.setCursor(7, 1);
+  lcd.print(valHumi);
+  lcd.print("%   ");
+
+  do {
+    do {
+      weight = scale.get_units(10);
+      lcd.setCursor(12, 2);
+      lcd.print(weight);
+      lcd.print("   ");
+      delay(100);
+    } while (abs(scale.get_units(10) - weight) > 0.5);
+  } while (weight < 0.3);
+  Serial.println(weight);
+  if (weight < 1) {
+    lcd.setCursor(0, 3);
+    lcd.print("Shell ");
+    servoSort.write(srvPosShell);
+    delay(2000);
+  } else if (weight < 1.5) {
+    lcd.setCursor(0, 3);
+    lcd.print("Male  ");
+    servoSort.write(srvPosMale);
+    delay(2000);
+  } else {
+    lcd.setCursor(0, 3);
+    lcd.print("Female");
+    servoSort.write(srvPosFemale);
+    delay(2000);
+  }
+  servoPush.write(srvPosPush);
+  delay(2000);
+  servoPush.write(srvPosReset);
+  lcd.setCursor(0, 3);
+  lcd.print("      ");
+}
